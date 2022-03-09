@@ -1,0 +1,5 @@
+.replit
+*.nix
+config/
+vscode/
+*.zip

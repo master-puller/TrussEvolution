@@ -1,86 +1,73 @@
-import numpy as np
-import matplotlib.pyplot as plt
+import pyglet
+from pyglet.gl import *
+from pyglet.window import keys
 
-E = 1e4
-A = 0.111
-nodes = []
-bars = []
-
-nodes.append([0, 0, 0])  # Repeat for the rest
-nodes.append([0, 100, 0])
-
-bars.append([0, 1])  # Repeat
-
-nodes = np.array(nodes).astype(float)
-bars = np.array(bars)  # Convert to numpy for faster processing
-
-# Applied forces
-P = np.zeros_like(nodes)
-P[1, 1] = -10  # idx 1 is y direction
-
-# Support displacement
-Ur = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-
-DOFCON = np.ones_like(nodes).astype(int)
-# Constraints of DOF
-DOFCON[0, :] = 0  # Fix node 0
+pos = [0, 0, -20]
+rot_y = 0
 
 
-def TrussAnalysis():
-    NN = len(nodes)
-    NE = len(bars)
+class Model:
 
-    DOF = 3
-    NDOF = DOF * NN
+    def get_text(self, file):
+        tex = pyglet.image.load(file).texture
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+        glTexParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        return pyglet.graphics.TextureGroup(tex)
 
-    # Start structurl analasys
-    d = nodes[bars[:, 1], :] - nodes[bars[:, 0], :]
-    L = np.sqrt((d**2).sum(axis=1))
-    angle = d.t / L
+    def __init__(self):
+        self.batch = pyglet.graphics.Batch()
+        self.top = self.get_tex("img.png")
 
-    a = np.concatenate((-angle.T, angle.T), axis=1)
-    K = np.zeros([NDOF, NDOF])  # actual matrix we will be solving
-    for k in range(NE):  # bar iteration
-        aux = 3 * bars[k, :]
-        index = np.r_[aux[0]:aux[0] + DOF, aux[1]:aux[1] + DOF]
-        ES = np.dot(a[k][np.newaxis].T * E * A, a[k][np.newaxis]) / L[k]
+        tex_coords = ('t2f', (0, 0, 1, 0, 1, 1, 0, 1) * 4)
 
-        K[np.ix_(index, index)] = K[np.ix_(index, index)] + ES
+        x, y, z = 0, 0, 0
+        X, Y, Z = 1, 1, 1
+        self.batch.add(4, GL_QUADS, None,
+                       ("v3f", (x, y, z, X, y, z, X, Y, z, x, Y, z)))
 
-    freeDOF = DOFCON.flatten().nonzero()[0]
-    supportDOF = (DOFCON.flatten() == 0).nonzero()[0]
-
-    Kff = K[np.ix_(freeDOF, freeDOF)]
-    Kfr = K[np.ix_(freeDOF, supportDOF)]
-    Krf = Kfr.T
-    Krr = K[np.ix_(supportDOF, supportDOF)]
-    Pf = P.flatten()[freeDOF]
-    Uf = np.linalg.solve(Kff, Pf)
-    U = DOFCON.astype(float).flatten()
-    U[freeDOF] = Uf
-    U[supportDOF] = Ur
-    U = U.reshape(NN, DOF)
-
-    u = np.concatenate((U[bars[:, 0]], U[bars[:, 1]]), axis=1)
-
-    N = E * A / L[:] * (a[:] * u[:]).sum(
-        axis=1)  # Structural forces of all the bars
-
-    R = (Krf[:] * Uf).sum(axis=1) + (Krr[:] * Ur).sum(axis=1)
-    R = R.reshape(4, DOF)
-
-    return np.array(N), np.array(R), U
+    def draw(self):
+        self.batch.draw()
 
 
-def Plot(nodes, c, lt, lw, lg):
-    plt.gca(projection="3d")
-    for i in range(len(bars)):
-        xi, xf = nodes[bars[i, 0], 0], nodes[bars[:, 1], 0]
-        yi, yf = nodes[bars[i, 0], 1], nodes[bars[:, 1], 1]
-        zi, zf = nodes[bars[i, 0], 2], nodes[bars[:, 1], 2]
-        line = plt.plot([xi, xf], [yi, yf], [zi, zf],
-                        color=c,
-                        linestyle=lt,
-                        linewidth=lw)
-    line.set_label(lg)
-    plt.legend(prop={'size': 14})
+class Player:
+    def __init__(self):
+        self.pos = [0] * 3
+        self.rot = [0] * 2
+
+    def update(self, dt, keys):
+        pass
+class Window(pyglet.window.Window):
+
+    def Projection(self):
+        glMatrixMode(GL_PERSPECTIVE)
+        glLoadIdentity()
+
+    def Model(self):
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+
+    def set3d(self):
+        self.Projection()
+        gluPerspective(70, self.width / self.height, 0.05, 1000)
+        self.Model()
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.set_minimum_size(200, 200)
+
+        self.model = Model()
+        self.player = Player()
+
+    def on_draw(self):
+        self.clear()
+        self.set3d()
+        self.model.draw()
+
+
+if __name__ == "__main__":
+    window = Window(width=500,
+                    height=300,
+                    caption="Truss Evolution",
+                    resizable=True)
+    glClearColor(0.5, 0.7, 1, 1)
+    pyglet.app.run()
